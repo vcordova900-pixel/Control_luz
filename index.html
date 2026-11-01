@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Consumo de Luz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen p-4 md:p-8">
+    <div class="max-w-3xl mx-auto bg-white rounded-xl shadow-md overflow-hidden">
+        <div class="bg-yellow-400 p-4 text-center font-bold text-xl text-slate-800">
+            CONTROL DE CONSUMO ELÉCTRICO
+        </div>
+        
+        <div class="p-6 space-y-6">
+            <!-- Sección de Lecturas -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700">Mes Anterior</label>
+                    <input type="month" id="mesAnterior" class="mt-1 w-full p-2 border rounded focus:ring-yellow-400 focus:border-yellow-400">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700">Lectura Anterior (kWh)</label>
+                    <input type="number" id="lecturaAnterior" class="mt-1 w-full p-2 border rounded focus:ring-yellow-400 focus:border-yellow-400" placeholder="Ej: 13835">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700">Mes Actual</label>
+                    <input type="month" id="mesActual" class="mt-1 w-full p-2 border rounded focus:ring-yellow-400 focus:border-yellow-400">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700">Lectura Actual (kWh)</label>
+                    <input type="number" id="lecturaActual" class="mt-1 w-full p-2 border rounded focus:ring-yellow-400 focus:border-yellow-400" placeholder="Ej: 14106">
+                </div>
+            </div>
+
+            <!-- Sección de Cálculos de Consumo -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm text-slate-600">Consumo (kWh)</label>
+                    <input type="number" id="consumoTotal" readonly class="mt-1 w-full p-2 bg-gray-100 border rounded font-mono font-bold">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-600">Sub Total Consumo (S/)</label>
+                    <input type="number" step="0.0001" id="subTotalConsumo" class="mt-1 w-full p-2 border rounded calculable" value="173.5213">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-600">IGV Consumo (S/)</label>
+                    <input type="number" id="igvConsumo" readonly class="mt-1 w-full p-2 bg-gray-100 border rounded font-mono">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-800">TOTAL CONSUMO (S/)</label>
+                    <input type="number" id="totalConsumo" readonly class="mt-1 w-full p-2 bg-yellow-100 border rounded font-mono font-bold text-lg text-slate-800">
+                </div>
+            </div>
+
+            <hr class="border-slate-200">
+
+            <!-- Cargos Adicionales -->
+            <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <label class="block text-slate-600">Cargo Fijo</label>
+                    <input type="number" step="0.01" id="cargoFijo" class="mt-1 w-full p-1.5 border rounded calculable" value="2.25">
+                </div>
+                <div>
+                    <label class="block text-slate-600">Mant. y Reposición</label>
+                    <input type="number" step="0.01" id="mantReposicion" class="mt-1 w-full p-1.5 border rounded calculable" value="1.39">
+                </div>
+                <div>
+                    <label class="block text-slate-600">Alumbrado Público</label>
+                    <input type="number" step="0.01" id="alumbradoPublico" class="mt-1 w-full p-1.5 border rounded calculable" value="19.01">
+                </div>
+                <div>
+                    <label class="block text-slate-600">Electrificación Rural</label>
+                    <input type="number" step="0.01" id="electrificacionRural" class="mt-1 w-full p-1.5 border rounded calculable" value="3.81">
+                </div>
+            </div>
+
+            <!-- Totales Finales -->
+            <div class="bg-slate-800 p-4 rounded-lg text-white grid grid-cols-1 md:grid-cols-3 gap-4 text-center items-center">
+                <div>
+                    <span class="block text-sm text-slate-400">Otros Cargos (Total)</span>
+                    <span id="totalOtrosCargos" class="block text-xl font-mono">S/ 0.00</span>
+                </div>
+                <div>
+                    <span class="block text-sm text-slate-400">Pago Dividido (50%)</span>
+                    <span id="pagoDividido" class="block text-xl font-mono text-yellow-400">S/ 0.00</span>
+                </div>
+                <div class="bg-yellow-400 p-2 rounded text-slate-900">
+                    <span class="block text-xs font-bold uppercase">Total a Pagar Luz</span>
+                    <span id="granTotal" class="block text-2xl font-bold font-mono">S/ 0.00</span>
+                </div>
+            </div>
+
+            <button id="btnGuardar" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition-colors">
+                Guardar Registro en Firebase
+            </button>
+            <p id="statusMsg" class="text-center text-sm font-semibold mt-2 hidden"></p>
+        </div>
+    </div>
+
+    <!-- Firebase SDK & Script (Módulo) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // Credenciales exactas del proyecto
+        const firebaseConfig = {
+            apiKey: "AIzaSyDvlYkw8BYRlKtQ9GIA8GwcXvMMkAVGK3A",
+            authDomain: "ccmodluzdelsur.firebaseapp.com",
+            projectId: "ccmodluzdelsur",
+            storageBucket: "ccmodluzdelsur.firebasestorage.app",
+            messagingSenderId: "879898932261",
+            appId: "1:879898932261:web:a5204f3bfb1f8f02a8fbcc",
+            measurementId: "G-7D6PSC30NY"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const consumosRef = collection(db, "registro_luz");
+
+        // Elementos del DOM
+        const inputs = document.querySelectorAll('input');
+        const lecturaAnterior = document.getElementById('lecturaAnterior');
+        const lecturaActual = document.getElementById('lecturaActual');
+        const consumoTotal = document.getElementById('consumoTotal');
+        const subTotalConsumo = document.getElementById('subTotalConsumo');
+        const igvConsumo = document.getElementById('igvConsumo');
+        const totalConsumo = document.getElementById('totalConsumo');
+        
+        const btnGuardar = document.getElementById('btnGuardar');
+        const statusMsg = document.getElementById('statusMsg');
+
+        // Lógica de cálculo (reacciona a cada cambio)
+        function calcularTotales() {
+            // 1. Diferencia de lecturas
+            const lAnt = parseFloat(lecturaAnterior.value) || 0;
+            const lAct = parseFloat(lecturaActual.value) || 0;
+            const consumo = lAct >= lAnt ? lAct - lAnt : 0;
+            consumoTotal.value = consumo;
+
+            // 2. IGV y Total Consumo (18% estándar)
+            const stConsumo = parseFloat(subTotalConsumo.value) || 0;
+            const igvCalculado = stConsumo * 0.18;
+            igvConsumo.value = igvCalculado.toFixed(6);
+            const totConsumo = stConsumo + igvCalculado;
+            totalConsumo.value = totConsumo.toFixed(6);
+
+            // 3. Otros Cargos
+            const cFijo = parseFloat(document.getElementById('cargoFijo').value) || 0;
+            const mRep = parseFloat(document.getElementById('mantReposicion').value) || 0;
+            const aPub = parseFloat(document.getElementById('alumbradoPublico').value) || 0;
+            const eRur = parseFloat(document.getElementById('electrificacionRural').value) || 0;
+            
+            const subTotCargos = cFijo + mRep + aPub + eRur;
+            const igvCargos = subTotCargos * 0.18;
+            const totalCargosFinal = subTotCargos + igvCargos;
+            
+            document.getElementById('totalOtrosCargos').innerText = `S/ ${totalCargosFinal.toFixed(4)}`;
+            
+            // 4. Pago dividido (Mitad de otros cargos, según modelo Excel)
+            const pDividido = totalCargosFinal / 2;
+            document.getElementById('pagoDividido').innerText = `S/ ${pDividido.toFixed(4)}`;
+
+            // 5. Gran Total
+            const totalPagar = totConsumo + pDividido;
+            document.getElementById('granTotal').innerText = `S/ ${totalPagar.toFixed(2)}`;
+        }
+
+        // Listener global para recalcular on-the-fly
+        inputs.forEach(input => input.addEventListener('input', calcularTotales));
+
+        // Cargar último registro al iniciar
+        async function cargarUltimoRegistro() {
+            try {
+                const q = query(consumosRef, orderBy("fechaRegistro", "desc"), limit(1));
+                const querySnapshot = await getDocs(q);
+                
+                if (!querySnapshot.empty) {
+                    const ultimo = querySnapshot.docs[0].data();
+                    
+                    // Trasladar la lectura actual antigua a lectura anterior nueva
+                    lecturaAnterior.value = ultimo.lecturaActual || '';
+                    document.getElementById('mesAnterior').value = ultimo.mesActual || '';
+                    
+                    // Autocompletar mes actual sumando 1 mes (formato YYYY-MM)
+                    if (ultimo.mesActual) {
+                        const fecha = new Date(ultimo.mesActual + '-01T00:00:00');
+                        fecha.setMonth(fecha.getMonth() + 1);
+                        const nextMonth = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+                        document.getElementById('mesActual').value = nextMonth;
+                    }
+                }
+            } catch (error) {
+                console.error("Error leyendo Firebase:", error);
+            }
+        }
+
+        // Guardar nuevo registro
+        btnGuardar.addEventListener('click', async () => {
+            btnGuardar.disabled = true;
+            btnGuardar.innerText = "Guardando...";
+            
+            try {
+                await addDoc(consumosRef, {
+                    mesAnterior: document.getElementById('mesAnterior').value,
+                    mesActual: document.getElementById('mesActual').value,
+                    lecturaAnterior: parseFloat(lecturaAnterior.value) || 0,
+                    lecturaActual: parseFloat(lecturaActual.value) || 0,
+                    consumoKwh: parseFloat(consumoTotal.value) || 0,
+                    totalFacturado: parseFloat(document.getElementById('granTotal').innerText.replace('S/ ', '')) || 0,
+                    fechaRegistro: serverTimestamp()
+                });
+
+                statusMsg.innerText = "¡Registro guardado exitosamente!";
+                statusMsg.className = "text-center text-sm font-semibold mt-2 text-green-600 block";
+                
+                // Preparar para el siguiente mes automáticamente
+                cargarUltimoRegistro();
+                lecturaActual.value = '';
+                
+            } catch (error) {
+                console.error("Error guardando:", error);
+                statusMsg.innerText = "Error al guardar. Revisa la consola.";
+                statusMsg.className = "text-center text-sm font-semibold mt-2 text-red-600 block";
+            } finally {
+                btnGuardar.disabled = false;
+                btnGuardar.innerText = "Guardar Registro en Firebase";
+                setTimeout(() => { statusMsg.classList.add('hidden'); }, 3000);
+            }
+        });
+
+        // Inicializar
+        cargarUltimoRegistro();
+    </script>
+</body>
+</html>
